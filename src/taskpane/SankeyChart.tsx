@@ -17,7 +17,7 @@ import { GraphData, ScaleMode, formatValue, formatYoy } from "./dataParser";
 // ── Layout constants ────────────────────────────────────────────
 const NODE_WIDTH = 16;
 const NODE_PAD = 14;
-const MARGIN = { top: 24, right: 200, bottom: 24, left: 200 };
+const MARGIN = { top: 100, right: 200, bottom: 100, left: 200 };
 const ACCENT_H = 5;   // height of the top colour bar on each node
 
 // ── Types passed into d3-sankey ─────────────────────────────────
@@ -130,6 +130,14 @@ export const SankeyChart = forwardRef<SankeyChartHandle, Props>(
                 .attr("transform", (d) => `translate(${d.x0},${d.y0})`)
                 .style("cursor", "grab");
 
+            // Invisible drag area to make it easier to grab
+            nodeGs.append("rect")
+                .attr("x", -20)
+                .attr("y", -10)
+                .attr("width", (d) => (d.x1 - d.x0) + 40)
+                .attr("height", (d) => Math.max(1, d.y1 - d.y0) + 20)
+                .attr("fill", "transparent");
+
             // Node body
             nodeGs.append("rect")
                 .attr("width", (d) => d.x1 - d.x0)
@@ -198,13 +206,28 @@ export const SankeyChart = forwardRef<SankeyChartHandle, Props>(
                 })
                 .on("drag", function (event, d) {
                     const nodeH = d.y1 - d.y0;
-                    d.y0 = Math.max(0, Math.min(H - nodeH, d.y0 + event.dy));
+                    const nodeW = d.x1 - d.x0;
+
+                    // Update positions
+                    d.x0 += event.dx;
+                    d.x1 = d.x0 + nodeW;
+                    d.y0 += event.dy;
                     d.y1 = d.y0 + nodeH;
+
                     d3.select(this).attr("transform", `translate(${d.x0},${d.y0})`);
-                    // Re-draw all links that touch this node
-                    linkPaths.filter(
-                        (lk) => lk.source === (d as unknown) || lk.target === (d as unknown)
-                    ).attr("d", sankeyLinkHorizontal() as never);
+
+                    // Tell layout to recalculate the internal link positions
+                    d3Sankey().update(graph);
+
+                    // Re-draw all links 
+                    linkPaths.attr("d", sankeyLinkHorizontal() as never);
+
+                    // Update the gradients so they align with the new node positions
+                    links.forEach((lk, i) => {
+                        defs.select(`#lg-${i}`)
+                            .attr("x1", lk.source.x1)
+                            .attr("x2", lk.target.x0);
+                    });
                 })
                 .on("end", function () {
                     d3.select(this).style("cursor", "grab");

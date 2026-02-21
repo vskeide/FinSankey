@@ -4,7 +4,7 @@ const HtmlWebpackPlugin = require("html-webpack-plugin");
 const CopyWebpackPlugin = require("copy-webpack-plugin");
 const fs = require("fs");
 
-module.exports = (env, options) => {
+module.exports = async (env, options) => {
     const isDev = options.mode !== "production";
 
     return {
@@ -51,11 +51,20 @@ module.exports = (env, options) => {
             }),
         ],
         devServer: {
-            port: 3000,
-            server: "https",
+            port: 3001,
+            server: {
+                type: "https",
+                options: env.WEBPACK_BUILD || options.https !== undefined ? options.https : await getHttpsOptions(),
+            },
             headers: { "Access-Control-Allow-Origin": "*" },
             client: { overlay: false },
         },
         devtool: isDev ? "source-map" : false,
     };
 };
+
+async function getHttpsOptions() {
+    const devCerts = require("office-addin-dev-certs");
+    const options = await devCerts.getHttpsServerOptions();
+    return options;
+}

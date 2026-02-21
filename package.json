@@ -6,6 +6,8 @@
   "license": "MIT",
   "scripts": {
     "start": "webpack serve --mode development",
+    "sideload": "office-addin-debugging start manifest.xml desktop",
+    "stop": "office-addin-debugging stop manifest.xml",
     "build": "webpack --mode production",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist"
@@ -28,6 +30,8 @@
     "css-loader": "^6.10.0",
     "gh-pages": "^6.1.1",
     "html-webpack-plugin": "^5.6.0",
+    "office-addin-debugging": "^6.0.6",
+    "office-addin-dev-certs": "^2.0.6",
     "style-loader": "^3.3.4",
     "ts-loader": "^9.5.1",
     "typescript": "^5.3.3",

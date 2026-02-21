@@ -18,8 +18,9 @@ const COST_KW = ["cost", "expense", "tax", "loss", "charge", "r&d", "sg&a", "cog
 
 function classifyId(id: string): keyof typeof COLORS {
     const lo = id.toLowerCase();
-    if (PROFIT_KW.some((k) => lo.includes(k))) return "profit";
+    // Check costs first, so "cost of revenue" is correctly grouped as a cost
     if (COST_KW.some((k) => lo.includes(k))) return "cost";
+    if (PROFIT_KW.some((k) => lo.includes(k))) return "profit";
     return "neutral";
 }
 
