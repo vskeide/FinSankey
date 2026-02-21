@@ -51,6 +51,9 @@ export const SankeyChart = forwardRef<SankeyChartHandle, Props>(
     ({ data, scale, width = 860, height = 520 }, ref) => {
         const svgRef = useRef<SVGSVGElement>(null);
 
+        // Store dragged positions across re-renders
+        const dragState = useRef<Record<string, { x0: number; y0: number }>>({});
+
         useImperativeHandle(ref, () => ({
             getSvgElement: () => svgRef.current,
         }));
@@ -84,6 +87,24 @@ export const SankeyChart = forwardRef<SankeyChartHandle, Props>(
                 nodes: data.sankeyNodes.map((n) => ({ ...n })) as SNode[],
                 links: data.sankeyLinks.map((l) => ({ ...l })) as SLink[],
             });
+
+            // Re-apply any saved drag state to the nodes
+            graph.nodes.forEach((n: any) => {
+                const saved = dragState.current[n.id];
+                if (saved) {
+                    const nodeW = n.x1 - n.x0;
+                    const nodeH = n.y1 - n.y0;
+                    n.x0 = saved.x0;
+                    n.x1 = saved.x0 + nodeW;
+                    n.y0 = saved.y0;
+                    n.y1 = saved.y0 + nodeH;
+                }
+            });
+
+            // Important: recalculate links based on the saved node positions
+            if (Object.keys(dragState.current).length > 0) {
+                d3Sankey().update(graph);
+            }
 
             const nodes = graph.nodes as unknown as LNode[];
             const links = graph.links as unknown as LLink[];
@@ -213,6 +234,9 @@ export const SankeyChart = forwardRef<SankeyChartHandle, Props>(
                     d.x1 = d.x0 + nodeW;
                     d.y0 += event.dy;
                     d.y1 = d.y0 + nodeH;
+
+                    // Save to ref so it survives scale re-rendering
+                    dragState.current[d.id] = { x0: d.x0, y0: d.y0 };
 
                     d3.select(this).attr("transform", `translate(${d.x0},${d.y0})`);
 

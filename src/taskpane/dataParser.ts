@@ -100,6 +100,10 @@ export function parseExcelData(
         const absPrior = Math.abs(prior);
         const yoyPct = prior !== 0 ? ((val - prior) / Math.abs(prior)) * 100 : null;
 
+        // Accumulate to source node (outgoing flow)
+        nodeTotals.get(srcId)!.value += absVal;
+        nodeTotals.get(srcId)!.prior += absPrior;
+
         if (val < 0) {
             // Route negative flow to a loss shadow node
             const lossId = `__loss__${tgtId}`;
@@ -112,7 +116,7 @@ export function parseExcelData(
             const cls = classifyId(tgtId);
             linkMeta.push({ sourceId: srcId, targetId: tgtId, value: absVal, prior: absPrior, yoyPct, linkColor: COLORS[cls].link });
             sankeyLinks.push({ source: srcId, target: tgtId, value: absVal || 0.001 });
-            // Accumulate to target node
+            // Accumulate to target node (incoming flow)
             nodeTotals.get(tgtId)!.value += absVal;
             nodeTotals.get(tgtId)!.prior += absPrior;
         }
