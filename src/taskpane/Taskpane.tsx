@@ -19,11 +19,13 @@ import {
     ArrowClockwise24Regular,
 } from "@fluentui/react-icons";
 import { SankeyChart, SankeyChartHandle } from "./SankeyChart";
-import { parseExcelData, GraphData, ScaleMode } from "./dataParser";
+import { parseExcelData, GraphData, ScaleMode, DisplayMode, DecimalMode } from "./dataParser";
 
 export const Taskpane: React.FC = () => {
     const [graphData, setGraphData] = useState<GraphData | null>(null);
     const [scale, setScale] = useState<ScaleMode>("B");
+    const [displayMode, setDisplayMode] = useState<DisplayMode>("Values");
+    const [decimals, setDecimals] = useState<DecimalMode>(1);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [exporting, setExporting] = useState(false);
@@ -103,7 +105,7 @@ export const Taskpane: React.FC = () => {
 
     // ── Dimensions (responsive to taskpane) ───────────────────────
     const CHART_W = 860;
-    const CHART_H = 520;
+    const CHART_H = 800;
 
     return (
         <div style={styles.shell}>
@@ -141,6 +143,34 @@ export const Taskpane: React.FC = () => {
                     </Select>
                 </div>
 
+                <div style={styles.scaleBox}>
+                    <Label htmlFor="display-sel" style={{ fontSize: 12 }}>Show</Label>
+                    <Select
+                        id="display-sel"
+                        size="small"
+                        value={displayMode}
+                        onChange={(_, d) => setDisplayMode(d.value as DisplayMode)}
+                    >
+                        <option value="Values">Values</option>
+                        <option value="YOY">YOY Growth</option>
+                        <option value="Blank">Blank</option>
+                    </Select>
+                </div>
+
+                <div style={styles.scaleBox}>
+                    <Label htmlFor="decimals-sel" style={{ fontSize: 12 }}>Decimals</Label>
+                    <Select
+                        id="decimals-sel"
+                        size="small"
+                        value={String(decimals)}
+                        onChange={(_, d) => setDecimals(Number(d.value) as DecimalMode)}
+                    >
+                        <option value="0">0</option>
+                        <option value="1">1</option>
+                        <option value="2">2</option>
+                    </Select>
+                </div>
+
                 <Button
                     appearance="outline"
                     icon={<ArrowDownload24Regular />}
@@ -166,6 +196,8 @@ export const Taskpane: React.FC = () => {
                             ref={chartRef}
                             data={graphData}
                             scale={scale}
+                            displayMode={displayMode}
+                            decimals={decimals}
                             width={CHART_W}
                             height={CHART_H}
                         />

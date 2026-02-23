@@ -12,7 +12,7 @@ import {
     sankey as d3Sankey,
     sankeyLinkHorizontal,
 } from "d3-sankey";
-import { GraphData, ScaleMode, formatValue, formatYoy } from "./dataParser";
+import { GraphData, ScaleMode, DisplayMode, DecimalMode, formatValue, formatYoy } from "./dataParser";
 
 // ── Layout constants ────────────────────────────────────────────
 const NODE_WIDTH = 16;
@@ -43,12 +43,14 @@ export interface SankeyChartHandle {
 interface Props {
     data: GraphData;
     scale: ScaleMode;
+    displayMode: DisplayMode;
+    decimals: DecimalMode;
     width?: number;
     height?: number;
 }
 
 export const SankeyChart = forwardRef<SankeyChartHandle, Props>(
-    ({ data, scale, width = 860, height = 520 }, ref) => {
+    ({ data, scale, displayMode, decimals, width = 860, height = 520 }, ref) => {
         const svgRef = useRef<SVGSVGElement>(null);
 
         // Store dragged positions across re-renders
@@ -203,13 +205,14 @@ export const SankeyChart = forwardRef<SankeyChartHandle, Props>(
                 .attr("font-size", "10px")
                 .attr("fill", "#555")
                 .text((d) => {
+                    if (displayMode === "Blank" || displayMode === "YOY") return "";
                     const m = data.nodeMeta.get(d.id);
-                    return formatValue(m?.totalValue ?? d.value ?? 0, scale);
+                    return formatValue(m?.totalValue ?? d.value ?? 0, scale, decimals);
                 });
 
             // Line 3: % Y/Y
             labelG.append("text")
-                .attr("y", 27)
+                .attr("y", displayMode === "YOY" ? 14 : 27)
                 .attr("text-anchor", anchor)
                 .attr("font-size", "10px")
                 .attr("font-weight", "500")
@@ -218,7 +221,12 @@ export const SankeyChart = forwardRef<SankeyChartHandle, Props>(
                     if (pct === null) return "#999";
                     return pct >= 0 ? "#2E7D32" : "#C62828";
                 })
-                .text((d) => formatYoy(data.nodeMeta.get(d.id)?.yoyPct ?? null));
+                .text((d) => {
+                    // We only want to show YOY if mode is YOY or implicitly if it was previously default (we will change default to 'Values' with YOY)
+                    // Let's implement full strictness: Blank = nothing. Values = only values. YOY = only YOY. But actually let's just make 'Values' show only values and 'YOY' only YOY.
+                    if (displayMode === "Blank" || displayMode === "Values") return "";
+                    return formatYoy(data.nodeMeta.get(d.id)?.yoyPct ?? null, decimals);
+                });
 
             // ── Drag behaviour ──────────────────────────────────────────
             const drag = d3.drag<SVGGElement, LNode>()
@@ -258,7 +266,7 @@ export const SankeyChart = forwardRef<SankeyChartHandle, Props>(
                 });
 
             nodeGs.call(drag);
-        }, [data, scale, width, height]);
+        }, [data, scale, displayMode, decimals, width, height]);
 
         return (
             <svg

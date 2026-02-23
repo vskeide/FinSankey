@@ -5,6 +5,8 @@
  * --------------------------------------------------------------- */
 
 export type ScaleMode = "Raw" | "K" | "M" | "B";
+export type DisplayMode = "Values" | "YOY" | "Blank";
+export type DecimalMode = 0 | 1 | 2;
 
 // ── Color scheme matching SankeyArt reference ──────────────────
 const COLORS = {
@@ -12,17 +14,6 @@ const COLORS = {
     cost: { fill: "#E91E63", accent: "#880E4F", link: "rgba(233,30,99,0.5)" },
     neutral: { fill: "#9E9E9E", accent: "#424242", link: "rgba(158,158,158,0.45)" },
 };
-
-const PROFIT_KW = ["profit", "revenue", "income", "earnings", "gain", "net", "gross", "ebit"];
-const COST_KW = ["cost", "expense", "tax", "loss", "charge", "r&d", "sg&a", "cogs", "deprec", "amort", "interest", "other"];
-
-function classifyId(id: string): keyof typeof COLORS {
-    const lo = id.toLowerCase();
-    // Check costs first, so "cost of revenue" is correctly grouped as a cost
-    if (COST_KW.some((k) => lo.includes(k))) return "cost";
-    if (PROFIT_KW.some((k) => lo.includes(k))) return "profit";
-    return "neutral";
-}
 
 // ── Public types ────────────────────────────────────────────────
 export interface NodeMeta {
@@ -77,12 +68,12 @@ export function parseExcelData(
     const rows = hasHeader ? rawValues.slice(1) : rawValues;
 
     // Accumulate totals by node id
-    const nodeTotals = new Map<string, { value: number; prior: number }>();
+    const nodeTotals = new Map<string, { inVal: number; outVal: number; inPrior: number; outPrior: number; rawSum: number; rawOutSum: number }>();
     const linkMeta: LinkMeta[] = [];
     const sankeyLinks: { source: string; target: string; value: number }[] = [];
 
     const touch = (id: string) => {
-        if (!nodeTotals.has(id)) nodeTotals.set(id, { value: 0, prior: 0 });
+        if (!nodeTotals.has(id)) nodeTotals.set(id, { inVal: 0, outVal: 0, inPrior: 0, outPrior: 0, rawSum: 0, rawOutSum: 0 });
     };
 
     for (const row of rows) {
@@ -101,41 +92,46 @@ export function parseExcelData(
         const yoyPct = prior !== 0 ? ((val - prior) / Math.abs(prior)) * 100 : null;
 
         // Accumulate to source node (outgoing flow)
-        nodeTotals.get(srcId)!.value += absVal;
-        nodeTotals.get(srcId)!.prior += absPrior;
+        nodeTotals.get(srcId)!.outVal += absVal;
+        nodeTotals.get(srcId)!.outPrior += absPrior;
+        nodeTotals.get(srcId)!.rawOutSum += val;
 
-        if (val < 0) {
-            // Route negative flow to a loss shadow node
-            const lossId = `__loss__${tgtId}`;
-            touch(lossId);
-            nodeTotals.get(lossId)!.value += absVal;
-            nodeTotals.get(lossId)!.prior += absPrior;
-            linkMeta.push({ sourceId: srcId, targetId: lossId, value: absVal, prior: absPrior, yoyPct, linkColor: COLORS.cost.link });
-            sankeyLinks.push({ source: srcId, target: lossId, value: absVal || 0.001 });
-        } else {
-            const cls = classifyId(tgtId);
-            linkMeta.push({ sourceId: srcId, targetId: tgtId, value: absVal, prior: absPrior, yoyPct, linkColor: COLORS[cls].link });
-            sankeyLinks.push({ source: srcId, target: tgtId, value: absVal || 0.001 });
-            // Accumulate to target node (incoming flow)
-            nodeTotals.get(tgtId)!.value += absVal;
-            nodeTotals.get(tgtId)!.prior += absPrior;
-        }
+        const cls = val < 0 ? "cost" : "profit";
+        linkMeta.push({ sourceId: srcId, targetId: tgtId, value: absVal, prior: absPrior, yoyPct, linkColor: COLORS[cls].link });
+        sankeyLinks.push({ source: srcId, target: tgtId, value: absVal || 0.001 });
+
+        // Accumulate to target node (incoming flow)
+        nodeTotals.get(tgtId)!.inVal += absVal;
+        nodeTotals.get(tgtId)!.inPrior += absPrior;
+        nodeTotals.get(tgtId)!.rawSum += val;
     }
 
     // Build NodeMeta map
     const nodeMeta = new Map<string, NodeMeta>();
     for (const [id, totals] of nodeTotals.entries()) {
-        const isLoss = id.startsWith("__loss__");
-        const name = isLoss ? id.replace("__loss__", "") + " (loss)" : id;
-        const cls = isLoss ? "cost" : classifyId(id);
-        const yoyPct = totals.prior !== 0
-            ? ((totals.value - totals.prior) / totals.prior) * 100
+        let cls: keyof typeof COLORS = "profit";
+
+        // Target nodes determine class by what flows into them
+        if (totals.inVal > 0) {
+            cls = totals.rawSum < 0 ? "cost" : "profit";
+        }
+        // Root nodes determine class by what flows out of them
+        else if (totals.outVal > 0) {
+            cls = totals.rawOutSum < 0 ? "cost" : "profit";
+        }
+
+        const nodeVal = Math.max(totals.inVal, totals.outVal);
+        const nodePrior = Math.max(totals.inPrior, totals.outPrior);
+
+        const yoyPct = nodePrior !== 0
+            ? ((nodeVal - nodePrior) / nodePrior) * 100
             : null;
+
         nodeMeta.set(id, {
             id,
-            name,
-            totalValue: totals.value,
-            totalPrior: totals.prior,
+            name: id,
+            totalValue: nodeVal,
+            totalPrior: nodePrior,
             yoyPct,
             fillColor: COLORS[cls].fill,
             accentColor: COLORS[cls].accent,
@@ -151,7 +147,7 @@ export function parseExcelData(
 }
 
 // ── Number formatting ────────────────────────────────────────────
-export function formatValue(value: number, scale: ScaleMode): string {
+export function formatValue(value: number, scale: ScaleMode, decimals: number = 1): string {
     let scaled = value;
     let suffix = "";
     switch (scale) {
@@ -160,11 +156,11 @@ export function formatValue(value: number, scale: ScaleMode): string {
         case "B": scaled = value / 1_000_000_000; suffix = "B"; break;
     }
     // Comma as decimal delimiter as per spec
-    return scaled.toFixed(1).replace(".", ",") + suffix;
+    return scaled.toFixed(decimals).replace(".", ",") + suffix;
 }
 
-export function formatYoy(pct: number | null): string {
+export function formatYoy(pct: number | null, decimals: number = 0): string {
     if (pct === null) return "";
     const sign = pct >= 0 ? "+" : "";
-    return `${sign}${pct.toFixed(0).replace(".", ",")}% Y/Y`;
+    return `${sign}${pct.toFixed(decimals).replace(".", ",")}% Y/Y`;
 }
