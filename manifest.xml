@@ -18,10 +18,6 @@
   <HighResolutionIconUrl DefaultValue="https://vskeide.github.io/FinSankey/assets/icon-64.png"/>
   <SupportUrl DefaultValue="https://vskeide.github.io/FinSankey"/>
 
-  <AppDomains>
-    <AppDomain>https://vskeide.github.io/FinSankey</AppDomain>
-  </AppDomains>
-
   <Hosts>
     <Host Name="Workbook"/>
   </Hosts>
