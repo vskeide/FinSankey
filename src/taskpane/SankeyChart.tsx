@@ -12,7 +12,7 @@ import {
     sankey as d3Sankey,
     sankeyLinkHorizontal,
 } from "d3-sankey";
-import { GraphData, ScaleMode, DisplayMode, DecimalMode, formatValue, formatYoy } from "./dataParser";
+import { GraphData, ScaleMode, DecimalMode, formatValue, formatYoy } from "./dataParser";
 
 // ── Layout constants ────────────────────────────────────────────
 const NODE_WIDTH = 16;
@@ -43,14 +43,15 @@ export interface SankeyChartHandle {
 interface Props {
     data: GraphData;
     scale: ScaleMode;
-    displayMode: DisplayMode;
+    showValues: boolean;
+    showYoy: boolean;
     decimals: DecimalMode;
     width?: number;
     height?: number;
 }
 
 export const SankeyChart = forwardRef<SankeyChartHandle, Props>(
-    ({ data, scale, displayMode, decimals, width = 860, height = 520 }, ref) => {
+    ({ data, scale, showValues, showYoy, decimals, width = 860, height = 520 }, ref) => {
         const svgRef = useRef<SVGSVGElement>(null);
 
         // Store dragged positions across re-renders
@@ -73,10 +74,33 @@ export const SankeyChart = forwardRef<SankeyChartHandle, Props>(
             // ── Defs container ──────────────────────────────────────────
             const defs = sel.append("defs");
 
-            // ── Main group ──────────────────────────────────────────────
-            const g = sel
+            // ── Main group (Zoom container) ─────────────────────────────
+            // We append a single group that will handle zoom transforms
+            const zoomG = sel.append("g");
+
+            // Re-apply margin inside the zoomed group
+            const g = zoomG
                 .append("g")
                 .attr("transform", `translate(${MARGIN.left},${MARGIN.top})`);
+
+            // ── Attach Zoom behaviour to SVG ────────────────────────────
+            const zoom = d3.zoom<SVGSVGElement, unknown>()
+                .scaleExtent([0.1, 4])
+                .on("zoom", (e) => {
+                    zoomG.attr("transform", e.transform);
+                });
+
+            sel.call(zoom);
+
+            // Set initial scale/pan (centered, zoomed out slightly to give room to drag)
+            const initialScale = 0.75;
+            const initialX = (W * (1 - initialScale)) / 2;
+            const initialY = (H * (1 - initialScale)) / 2;
+
+            sel.call(
+                zoom.transform,
+                d3.zoomIdentity.translate(initialX, initialY).scale(initialScale)
+            );
 
             // ── Sankey layout ───────────────────────────────────────────
             const layout = d3Sankey<SNode, SLink>()
@@ -205,14 +229,14 @@ export const SankeyChart = forwardRef<SankeyChartHandle, Props>(
                 .attr("font-size", "10px")
                 .attr("fill", "#555")
                 .text((d) => {
-                    if (displayMode === "Blank" || displayMode === "YOY") return "";
+                    if (!showValues) return "";
                     const m = data.nodeMeta.get(d.id);
                     return formatValue(m?.totalValue ?? d.value ?? 0, scale, decimals);
                 });
 
             // Line 3: % Y/Y
             labelG.append("text")
-                .attr("y", displayMode === "YOY" ? 14 : 27)
+                .attr("y", showValues ? 27 : 14) // move up if values aren't showing
                 .attr("text-anchor", anchor)
                 .attr("font-size", "10px")
                 .attr("font-weight", "500")
@@ -222,15 +246,15 @@ export const SankeyChart = forwardRef<SankeyChartHandle, Props>(
                     return pct >= 0 ? "#2E7D32" : "#C62828";
                 })
                 .text((d) => {
-                    // We only want to show YOY if mode is YOY or implicitly if it was previously default (we will change default to 'Values' with YOY)
-                    // Let's implement full strictness: Blank = nothing. Values = only values. YOY = only YOY. But actually let's just make 'Values' show only values and 'YOY' only YOY.
-                    if (displayMode === "Blank" || displayMode === "Values") return "";
+                    if (!showYoy) return "";
                     return formatYoy(data.nodeMeta.get(d.id)?.yoyPct ?? null, decimals);
                 });
 
             // ── Drag behaviour ──────────────────────────────────────────
             const drag = d3.drag<SVGGElement, LNode>()
-                .on("start", function () {
+                .on("start", function (event) {
+                    // Prevent d3 zoom pan behavior while dragging a node
+                    event.sourceEvent.stopPropagation();
                     d3.select(this).style("cursor", "grabbing").raise();
                 })
                 .on("drag", function (event, d) {
@@ -266,7 +290,7 @@ export const SankeyChart = forwardRef<SankeyChartHandle, Props>(
                 });
 
             nodeGs.call(drag);
-        }, [data, scale, displayMode, decimals, width, height]);
+        }, [data, scale, showValues, showYoy, decimals, width, height]);
 
         return (
             <svg

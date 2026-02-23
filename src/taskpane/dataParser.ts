@@ -5,7 +5,6 @@
  * --------------------------------------------------------------- */
 
 export type ScaleMode = "Raw" | "K" | "M" | "B";
-export type DisplayMode = "Values" | "YOY" | "Blank";
 export type DecimalMode = 0 | 1 | 2;
 
 // ── Color scheme matching SankeyArt reference ──────────────────

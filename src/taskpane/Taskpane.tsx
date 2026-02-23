@@ -11,6 +11,7 @@ import {
     MessageBarBody,
     Spinner,
     Tooltip,
+    Checkbox,
     tokens,
 } from "@fluentui/react-components";
 import {
@@ -19,12 +20,13 @@ import {
     ArrowClockwise24Regular,
 } from "@fluentui/react-icons";
 import { SankeyChart, SankeyChartHandle } from "./SankeyChart";
-import { parseExcelData, GraphData, ScaleMode, DisplayMode, DecimalMode } from "./dataParser";
+import { parseExcelData, GraphData, ScaleMode, DecimalMode } from "./dataParser";
 
 export const Taskpane: React.FC = () => {
     const [graphData, setGraphData] = useState<GraphData | null>(null);
     const [scale, setScale] = useState<ScaleMode>("B");
-    const [displayMode, setDisplayMode] = useState<DisplayMode>("Values");
+    const [showValues, setShowValues] = useState<boolean>(true);
+    const [showYoy, setShowYoy] = useState<boolean>(false);
     const [decimals, setDecimals] = useState<DecimalMode>(1);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -144,17 +146,17 @@ export const Taskpane: React.FC = () => {
                 </div>
 
                 <div style={styles.scaleBox}>
-                    <Label htmlFor="display-sel" style={{ fontSize: 12 }}>Show</Label>
-                    <Select
-                        id="display-sel"
-                        size="small"
-                        value={displayMode}
-                        onChange={(_, d) => setDisplayMode(d.value as DisplayMode)}
-                    >
-                        <option value="Values">Values</option>
-                        <option value="YOY">YOY Growth</option>
-                        <option value="Blank">Blank</option>
-                    </Select>
+                    <Label style={{ fontSize: 12 }}>Show</Label>
+                    <Checkbox
+                        label="Values"
+                        checked={showValues}
+                        onChange={(_, d) => setShowValues(!!d.checked)}
+                    />
+                    <Checkbox
+                        label="YoY"
+                        checked={showYoy}
+                        onChange={(_, d) => setShowYoy(!!d.checked)}
+                    />
                 </div>
 
                 <div style={styles.scaleBox}>
@@ -196,7 +198,8 @@ export const Taskpane: React.FC = () => {
                             ref={chartRef}
                             data={graphData}
                             scale={scale}
-                            displayMode={displayMode}
+                            showValues={showValues}
+                            showYoy={showYoy}
                             decimals={decimals}
                             width={CHART_W}
                             height={CHART_H}
